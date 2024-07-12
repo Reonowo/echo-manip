@@ -1,4 +1,6 @@
-import sys
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -7,9 +9,30 @@ import pyautogui
 import time
 
 
+def log_with_timestamp(message):
+    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {message}")
+
+
 def setup_driver():
-    driver = webdriver.Chrome()  # Or webdriver.Firefox(), etc.
+    log_with_timestamp("Starting setup_driver function")
+
+    # Set up Chrome options
+    chrome_options = Options()
+    chrome_options.page_load_strategy = 'eager'  # Don't wait for all resources to download
+    chrome_options.add_argument("--log-level=3")  # Only show fatal errors
+    log_with_timestamp("Chrome options set")
+
+    # Use webdriver_manager to automatically download and use the correct ChromeDriver version
+    service = Service(ChromeDriverManager().install())
+    log_with_timestamp("ChromeDriver service created")
+
+    # Initialize the driver
+    driver = webdriver.Chrome(service=service, options=chrome_options)
+    log_with_timestamp("WebDriver initialized")
+
+    log_with_timestamp("Navigating to https://clock.zone/")
     driver.get("https://clock.zone/")
+    log_with_timestamp("Navigation complete")
 
     js_code = """
     function onTimeChange(hours, minutes, seconds, milliseconds) {
@@ -17,6 +40,7 @@ def setup_driver():
     }
 
     function setupObserver() {
+        console.log('Attempting to set up observer');
         const clockElement = document.getElementById('MyClockDisplay');
         if (!clockElement) {
             console.log('Clock element not found. Retrying in 1 second...');
@@ -44,10 +68,24 @@ def setup_driver():
         document.body.setAttribute('data-observer-ready', 'true');
     }
 
+    // Attempt to set up the observer immediately
     setupObserver();
+
+    // If it fails, retry every second
+    const retryInterval = setInterval(() => {
+        if (!document.body.hasAttribute('data-observer-ready')) {
+            console.log('Retrying observer setup...');
+            setupObserver();
+        } else {
+            clearInterval(retryInterval);
+        }
+    }, 1000);
     """
 
+    log_with_timestamp("Executing JavaScript code")
     driver.execute_script(js_code)
+    log_with_timestamp("JavaScript code execution complete")
+
     return driver
 
 
@@ -75,14 +113,17 @@ def should_click(h, m, s, ms, h_pattern, m_pattern, s_pattern, ms_pattern):
 
 
 def wait_for_observer(driver):
+    log_with_timestamp("Waiting for observer to be ready")
     WebDriverWait(driver, 30).until(
         EC.presence_of_element_located((By.CSS_SELECTOR, "body[data-observer-ready='true']"))
     )
-    print("Observer setup complete. Clock monitoring has started.")
+    log_with_timestamp("Observer setup complete. Clock monitoring has started.")
 
 
 def main():
+    log_with_timestamp("Starting main function")
     driver = setup_driver()
+
     try:
         wait_for_observer(driver)
 
@@ -96,6 +137,7 @@ def main():
         second_pattern = ["15", "30", "45"]
         millisecond_pattern = "XX"
 
+        log_with_timestamp("Entering main loop")
         while True:
             current = time.perf_counter()
             if current >= next_check:
@@ -105,7 +147,7 @@ def main():
                     if should_click(h, m, s, ms, hour_pattern, minute_pattern, second_pattern, millisecond_pattern):
                         if s != last_click_second:
                             pyautogui.click()
-                            print(f"Clicked at {h}:{m}:{s}:{ms}")
+                            log_with_timestamp(f"Clicked at {h}:{m}:{s}:{ms}")
                             last_click_second = s
 
                 next_check = current + interval
@@ -115,9 +157,10 @@ def main():
                 pass
 
     except KeyboardInterrupt:
-        print("Script stopped by user")
+        log_with_timestamp("Script stopped by user")
     finally:
         driver.quit()
+        log_with_timestamp("Driver quit")
 
 
 if __name__ == "__main__":
