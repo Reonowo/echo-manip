@@ -1,5 +1,8 @@
+import sys
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 import pyautogui
 import time
 
@@ -36,6 +39,9 @@ def setup_driver():
         const config = { childList: true, characterData: true, subtree: true };
         observer.observe(clockElement, config);
         console.log('Observer set up successfully!');
+
+        // Notify Python that the observer is set up
+        document.body.setAttribute('data-observer-ready', 'true');
     }
 
     setupObserver();
@@ -68,9 +74,18 @@ def should_click(h, m, s, ms, h_pattern, m_pattern, s_pattern, ms_pattern):
             time_matches_pattern(ms, ms_pattern))
 
 
+def wait_for_observer(driver):
+    WebDriverWait(driver, 30).until(
+        EC.presence_of_element_located((By.CSS_SELECTOR, "body[data-observer-ready='true']"))
+    )
+    print("Observer setup complete. Clock monitoring has started.")
+
+
 def main():
     driver = setup_driver()
     try:
+        wait_for_observer(driver)
+
         last_click_second = None
         interval = 0.001  # 1ms interval for high precision checking
         next_check = time.perf_counter() + interval
