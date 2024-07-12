@@ -5,7 +5,7 @@ import time
 
 
 def setup_driver():
-    driver = webdriver.Chrome()
+    driver = webdriver.Chrome()  # Or webdriver.Firefox(), etc.
     driver.get("https://clock.zone/")
 
     js_code = """
@@ -46,7 +46,12 @@ def setup_driver():
 
 
 def time_matches_pattern(current_time, pattern):
-    return all(c == p or p == 'X' for c, p in zip(current_time, pattern))
+    if isinstance(pattern, str):
+        return current_time == pattern or pattern == 'XX' or (
+                pattern.startswith('X') and current_time.endswith(pattern[1:]))
+    elif isinstance(pattern, list):
+        return current_time in pattern
+    return False
 
 
 def get_current_time(driver):
@@ -70,13 +75,19 @@ def main():
         interval = 0.001  # 1ms interval for high precision checking
         next_check = time.perf_counter() + interval
 
+        # Define your click pattern here
+        hour_pattern = "XX"
+        minute_pattern = "XX"
+        second_pattern = ["15", "30", "45"]
+        millisecond_pattern = "XX"
+
         while True:
             current = time.perf_counter()
             if current >= next_check:
                 time_parts = get_current_time(driver)
                 if time_parts:
                     h, m, s, ms = time_parts
-                    if should_click(h, m, s, ms, "XX", "XX", "X5", "XX"):
+                    if should_click(h, m, s, ms, hour_pattern, minute_pattern, second_pattern, millisecond_pattern):
                         if s != last_click_second:
                             pyautogui.click()
                             print(f"Clicked at {h}:{m}:{s}:{ms}")
@@ -84,7 +95,7 @@ def main():
 
                 next_check = current + interval
 
-            # Busy-wait for the remaining time because we need to ensure we control the CPU cycle
+            # Busy-wait for the remaining time
             while time.perf_counter() < next_check:
                 pass
 
