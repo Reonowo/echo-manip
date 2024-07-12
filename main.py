@@ -1,3 +1,6 @@
+import tkinter as tk
+from tkinter import ttk
+import threading
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
@@ -7,6 +10,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import pyautogui
 import time
+import keyboard
 
 
 def log_with_timestamp(message):
@@ -16,17 +20,14 @@ def log_with_timestamp(message):
 def setup_driver():
     log_with_timestamp("Starting setup_driver function")
 
-    # Set up Chrome options
     chrome_options = Options()
-    chrome_options.page_load_strategy = 'eager'  # Don't wait for all resources to download
-    chrome_options.add_argument("--log-level=3")  # Only show fatal errors
+    chrome_options.add_argument("--log-level=3")
+    chrome_options.page_load_strategy = 'eager'
     log_with_timestamp("Chrome options set")
 
-    # Use webdriver_manager to automatically download and use the correct ChromeDriver version
     service = Service(ChromeDriverManager().install())
     log_with_timestamp("ChromeDriver service created")
 
-    # Initialize the driver
     driver = webdriver.Chrome(service=service, options=chrome_options)
     log_with_timestamp("WebDriver initialized")
 
@@ -40,7 +41,6 @@ def setup_driver():
     }
 
     function setupObserver() {
-        console.log('Attempting to set up observer');
         const clockElement = document.getElementById('MyClockDisplay');
         if (!clockElement) {
             console.log('Clock element not found. Retrying in 1 second...');
@@ -64,25 +64,12 @@ def setup_driver():
         observer.observe(clockElement, config);
         console.log('Observer set up successfully!');
 
-        // Notify Python that the observer is set up
         document.body.setAttribute('data-observer-ready', 'true');
     }
 
-    // Attempt to set up the observer immediately
     setupObserver();
-
-    // If it fails, retry every second
-    const retryInterval = setInterval(() => {
-        if (!document.body.hasAttribute('data-observer-ready')) {
-            console.log('Retrying observer setup...');
-            setupObserver();
-        } else {
-            clearInterval(retryInterval);
-        }
-    }, 1000);
     """
 
-    log_with_timestamp("Executing JavaScript code")
     driver.execute_script(js_code)
     log_with_timestamp("JavaScript code execution complete")
 
@@ -120,9 +107,59 @@ def wait_for_observer(driver):
     log_with_timestamp("Observer setup complete. Clock monitoring has started.")
 
 
+class AutoClickerApp:
+    def __init__(self, master, driver):
+        self.master = master
+        self.driver = driver
+        master.title("Echo Manipulator")
+        master.geometry("300x200")
+
+        self.clicking_enabled = tk.BooleanVar()
+        self.clicking_enabled.set(False)
+
+        self.enable_button = ttk.Checkbutton(master, text="Enable Clicking", variable=self.clicking_enabled)
+        self.enable_button.pack(pady=10)
+
+        self.status_label = ttk.Label(master, text="Clicking Disabled")
+        self.status_label.pack(pady=10)
+
+        self.last_click_label = ttk.Label(master, text="Last Click: N/A")
+        self.last_click_label.pack(pady=10)
+
+        self.quit_button = ttk.Button(master, text="Quit", command=self.quit)
+        self.quit_button.pack(pady=10)
+
+        self.clicking_enabled.trace("w", self.update_status)
+
+        # Set up hotkeys
+        keyboard.add_hotkey('f13', self.toggle_clicking)
+        keyboard.add_hotkey('f16', self.quit)
+
+        self.running = True
+
+    def update_status(self, *args):
+        if self.clicking_enabled.get():
+            self.status_label.config(text="Clicking Enabled")
+        else:
+            self.status_label.config(text="Clicking Disabled")
+
+    def update_last_click(self, time):
+        self.last_click_label.config(text=f"Last Click: {time}")
+
+    def toggle_clicking(self):
+        self.clicking_enabled.set(not self.clicking_enabled.get())
+
+    def quit(self):
+        self.running = False
+        self.master.after(100, self.master.quit)  # Allow time for the clicker thread to stop
+
+
 def main():
     log_with_timestamp("Starting main function")
     driver = setup_driver()
+
+    root = tk.Tk()
+    app = AutoClickerApp(root, driver)
 
     try:
         wait_for_observer(driver)
@@ -131,39 +168,56 @@ def main():
         interval = 0.001  # 1ms interval for high precision checking
         next_check = time.perf_counter() + interval
 
-        # Define your click pattern here
         hour_pattern = "XX"
         minute_pattern = "XX"
         second_pattern = ["15", "30", "45"]
         millisecond_pattern = "XX"
 
         log_with_timestamp("Entering main loop")
-        while True:
-            current = time.perf_counter()
-            if current >= next_check:
-                time_parts = get_current_time(driver)
-                if time_parts:
-                    h, m, s, ms = time_parts
-                    if should_click(h, m, s, ms, hour_pattern, minute_pattern, second_pattern, millisecond_pattern):
-                        if s != last_click_second:
-                            pyautogui.click()
-                            log_with_timestamp(f"Clicked at {h}:{m}:{s}:{ms}")
-                            last_click_second = s
 
-                next_check = current + interval
+        def clicker_loop():
+            nonlocal last_click_second, next_check
+            while app.running:
+                current = time.perf_counter()
+                if current >= next_check:
+                    try:
+                        time_parts = get_current_time(driver)
+                        if time_parts and app.clicking_enabled.get():
+                            h, m, s, ms = time_parts
+                            if should_click(h, m, s, ms, hour_pattern, minute_pattern, second_pattern,
+                                            millisecond_pattern):
+                                if s != last_click_second:
+                                    pyautogui.click()
+                                    click_time = f"{h}:{m}:{s}:{ms}"
+                                    log_with_timestamp(f"Clicked at {click_time}")
+                                    app.update_last_click(click_time)
+                                    last_click_second = s
+                    except Exception as e:
+                        if app.running:
+                            log_with_timestamp(f"Error in clicker loop: {e}")
+                        break
 
-            # Busy-wait for the remaining time
-            while time.perf_counter() < next_check:
-                pass
+                    next_check = current + interval
 
-    except KeyboardInterrupt:
-        log_with_timestamp("Script stopped by user")
+                # Busy-wait for the remaining time
+                while time.perf_counter() < next_check and app.running:
+                    pass
+
+            log_with_timestamp("Clicker loop ended")
+
+        clicker_thread = threading.Thread(target=clicker_loop, daemon=True)
+        clicker_thread.start()
+
+        root.mainloop()
+
+    except Exception as e:
+        log_with_timestamp(f"An error occurred: {e}")
     finally:
+        app.running = False
+        time.sleep(0.2)  # Give the clicker thread time to stop
         driver.quit()
         log_with_timestamp("Driver quit")
 
 
 if __name__ == "__main__":
     main()
-    # Keep the console window open
-    input("Press Enter to exit...")
