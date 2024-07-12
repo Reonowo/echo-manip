@@ -1,3 +1,4 @@
+import json
 import tkinter as tk
 from tkinter import ttk
 import threading
@@ -15,6 +16,33 @@ import keyboard
 
 def log_with_timestamp(message):
     print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {message}")
+
+
+def load_config():
+    try:
+        with open('config.json', 'r') as config_file:
+            return json.load(config_file)
+    except FileNotFoundError:
+        log_with_timestamp("Config file not found. Creating default config.")
+        default_config = {
+            "keybinds": {
+                "toggle_clicking": "f13",
+                "quit": "f16"
+            },
+            "time_patterns": {
+                "hour": "XX",
+                "minute": "XX",
+                "second": ["15", "30", "45"],
+                "millisecond": "XX"
+            },
+            "window": {
+                "title": "Echo Manipulator",
+                "size": "300x200"
+            }
+        }
+        with open('config.json', 'w') as config_file:
+            json.dump(default_config, config_file, indent=4)
+        return default_config
 
 
 def setup_driver():
@@ -111,31 +139,49 @@ class AutoClickerApp:
     def __init__(self, master, driver):
         self.master = master
         self.driver = driver
-        master.title("Echo Manipulator")
-        master.geometry("300x200")
+        self.config = load_config()
+        self.apply_config()
 
         self.clicking_enabled = tk.BooleanVar()
         self.clicking_enabled.set(False)
 
         self.enable_button = ttk.Checkbutton(master, text="Enable Clicking", variable=self.clicking_enabled)
-        self.enable_button.pack(pady=10)
+        self.enable_button.pack(pady=5)
 
         self.status_label = ttk.Label(master, text="Clicking Disabled")
-        self.status_label.pack(pady=10)
+        self.status_label.pack(pady=5)
 
         self.last_click_label = ttk.Label(master, text="Last Click: N/A")
-        self.last_click_label.pack(pady=10)
+        self.last_click_label.pack(pady=5)
+
+        self.reload_button = ttk.Button(master, text="Reload Config", command=self.reload_config)
+        self.reload_button.pack(pady=5)
 
         self.quit_button = ttk.Button(master, text="Quit", command=self.quit)
-        self.quit_button.pack(pady=10)
+        self.quit_button.pack(pady=5)
 
         self.clicking_enabled.trace("w", self.update_status)
 
-        # Set up hotkeys
-        keyboard.add_hotkey('f13', self.toggle_clicking)
-        keyboard.add_hotkey('f16', self.quit)
+        self.setup_hotkeys()
 
         self.running = True
+
+    def apply_config(self):
+        window_config = self.config['window']
+        self.master.title(window_config['title'])
+        self.master.geometry(window_config['size'])
+
+    def setup_hotkeys(self):
+        keybinds = self.config['keybinds']
+        keyboard.add_hotkey(keybinds['toggle_clicking'], self.toggle_clicking)
+        keyboard.add_hotkey(keybinds['quit'], self.quit)
+
+    def reload_config(self):
+        keyboard.unhook_all()
+        self.config = load_config()
+        self.apply_config()
+        self.setup_hotkeys()
+        log_with_timestamp("Config reloaded")
 
     def update_status(self, *args):
         if self.clicking_enabled.get():
@@ -151,7 +197,7 @@ class AutoClickerApp:
 
     def quit(self):
         self.running = False
-        self.master.after(100, self.master.quit)  # Allow time for the clicker thread to stop
+        self.master.after(100, self.master.quit)
 
 
 def main():
@@ -168,11 +214,6 @@ def main():
         interval = 0.001  # 1ms interval for high precision checking
         next_check = time.perf_counter() + interval
 
-        hour_pattern = "XX"
-        minute_pattern = "XX"
-        second_pattern = ["15", "30", "45"]
-        millisecond_pattern = "XX"
-
         log_with_timestamp("Entering main loop")
 
         def clicker_loop():
@@ -184,8 +225,9 @@ def main():
                         time_parts = get_current_time(driver)
                         if time_parts and app.clicking_enabled.get():
                             h, m, s, ms = time_parts
-                            if should_click(h, m, s, ms, hour_pattern, minute_pattern, second_pattern,
-                                            millisecond_pattern):
+                            patterns = app.config['time_patterns']
+                            if should_click(h, m, s, ms, patterns['hour'], patterns['minute'], patterns['second'],
+                                            patterns['millisecond']):
                                 if s != last_click_second:
                                     pyautogui.click()
                                     click_time = f"{h}:{m}:{s}:{ms}"
@@ -199,7 +241,6 @@ def main():
 
                     next_check = current + interval
 
-                # Busy-wait for the remaining time
                 while time.perf_counter() < next_check and app.running:
                     pass
 
@@ -214,7 +255,7 @@ def main():
         log_with_timestamp(f"An error occurred: {e}")
     finally:
         app.running = False
-        time.sleep(0.2)  # Give the clicker thread time to stop
+        time.sleep(0.2)
         driver.quit()
         log_with_timestamp("Driver quit")
 

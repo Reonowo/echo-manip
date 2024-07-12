@@ -1,0 +1,21 @@
+{
+    "keybinds": {
+        "toggle_clicking": "f13",
+        "quit": "f16"
+    },
+    "time_patterns": {
+        "hour": "XX",
+        "minute": "XX",
+        "second": [
+            "00",
+            "15",
+            "30",
+            "45"
+        ],
+        "millisecond": "XX"
+    },
+    "window": {
+        "title": "Echo Manipulator",
+        "size": "300x200"
+    }
+}
