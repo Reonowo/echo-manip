@@ -5,9 +5,8 @@
     },
     "time_patterns": {
         "hour": "XX",
-        "minute": "XX",
+        "minute": "X9",
         "second": [
-            "00",
             "15",
             "30",
             "45"
@@ -16,6 +15,6 @@
     },
     "window": {
         "title": "Echo Manipulator",
-        "size": "300x200"
+        "size": "300x168"
     }
 }
