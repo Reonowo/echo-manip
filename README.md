@@ -10,7 +10,7 @@ Make sure you have [python3](https://www.python.org/downloads/release/python-312
 - Run `pip install -r requirements.txt`
 - Modify the config.json to configure the time patterns you want
   - Optionally you can also configure the keybinds
-- Run launcher.py
+- Run `run.bat`
 - Wait for the GUI to pop up
   - Ensure that "Enable Clicking" is checked when you want it to click
 - Put your mouse over the "tune" button
