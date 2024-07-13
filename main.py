@@ -15,6 +15,7 @@ from selenium.webdriver.support import expected_conditions as EC
 import pyautogui
 import time
 import keyboard
+from PIL import ImageDraw, ImageFont
 
 
 def setup_logging():
@@ -270,6 +271,41 @@ class AutoClickerApp:
             left = (screen_width - width) // 2
             top = (screen_height - height) // 2
             screenshot = pyautogui.screenshot(region=(left, top, width, height))
+
+            # Create a drawing object
+            draw = ImageDraw.Draw(screenshot)
+
+            # Set up the font
+            try:
+                font = ImageFont.truetype("arial.ttf", 32)
+            except IOError:
+                print("Arial font not found. Using default font.")
+                font = ImageFont.load_default()
+
+            # Prepare the text
+            time_pattern = self.get_time_pattern_text().split(": ")[1]  # Get just the pattern part
+            text = f"Click at {click_time} with pattern {time_pattern}"
+
+            # Get text size
+            left, top, right, bottom = draw.textbbox((0, 0), text, font=font)
+            text_width = right - left
+            text_height = bottom - top
+
+            # Calculate position (bottom right corner)
+            text_position = (width - text_width - 10, height - text_height - 10)
+
+            # Draw text with black border
+            border_color = (0, 0, 0)  # Black
+            text_color = (255, 255, 255)  # White
+
+            # Draw border
+            for offset in [(1, 1), (-1, 1), (1, -1), (-1, -1)]:
+                draw.text((text_position[0] + offset[0], text_position[1] + offset[1]), text, font=font,
+                          fill=border_color)
+
+            # Draw main text
+            draw.text(text_position, text, font=font, fill=text_color)
+
             timestamp = time.strftime("%Y%m%d_%H%M%S")
             screenshot.save(f'screenshots/screenshot_{timestamp}.png')
             log_with_timestamp(f"Screenshot saved: screenshot_{timestamp}.png (for click at {click_time})")
