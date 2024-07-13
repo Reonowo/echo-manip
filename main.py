@@ -310,32 +310,38 @@ def main():
         def clicker_loop():
             nonlocal last_click_second, next_check
             while app.running:
-                current = time.perf_counter()
-                if current >= next_check:
-                    try:
-                        time_parts = get_current_time(driver)
-                        if time_parts and app.clicking_enabled.get():
-                            h, m, s, ms = time_parts
-                            patterns = app.config['time_patterns']
-                            if should_click(h, m, s, ms, patterns['hour'], patterns['minute'], patterns['second'],
-                                            patterns['millisecond']):
-                                if s != last_click_second:
-                                    pyautogui.click()
-                                    click_time = f"{h}:{m}:{s}:{ms}"
-                                    log_with_timestamp(f"Clicked at {click_time}")
-                                    app.update_last_click(click_time)
-                                    if app.screenshot_enabled.get():
-                                        app.take_screenshot(click_time)
-                                    last_click_second = s
-                    except Exception as e:
-                        if app.running:
-                            log_with_timestamp(f"Error in clicker loop: {e}")
-                        break
+                if app.clicking_enabled.get() or app.screenshot_enabled.get():
+                    current = time.perf_counter()
+                    if current >= next_check:
+                        try:
+                            time_parts = get_current_time(driver)
+                            if time_parts:
+                                h, m, s, ms = time_parts
+                                patterns = app.config['time_patterns']
+                                if app.clicking_enabled.get() and should_click(h, m, s, ms, patterns['hour'],
+                                                                               patterns['minute'], patterns['second'],
+                                                                               patterns['millisecond']):
+                                    if s != last_click_second:
+                                        pyautogui.click()
+                                        click_time = f"{h}:{m}:{s}:{ms}"
+                                        log_with_timestamp(f"Clicked at {click_time}")
+                                        app.update_last_click(click_time)
+                                        if app.screenshot_enabled.get():
+                                            app.take_screenshot(click_time)
+                                        last_click_second = s
+                        except Exception as e:
+                            if app.running:
+                                log_with_timestamp(f"Error in clicker loop: {e}")
+                            break
 
-                    next_check = current + interval
+                        next_check = current + interval
 
-                while time.perf_counter() < next_check and app.running:
-                    pass
+                    while time.perf_counter() < next_check and app.running:
+                        pass
+                else:
+                    # If both clicking and screenshots are disabled, sleep to reduce CPU usage
+                    # This does have the caveat of not being able to "respond immediately" but eh.
+                    time.sleep(0.1)
 
             log_with_timestamp("Clicker loop ended")
 
