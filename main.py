@@ -203,23 +203,17 @@ class AutoClickerApp:
         self.screenshot_button = ttk.Checkbutton(master, text="Enable Screenshots", variable=self.screenshot_enabled)
         self.screenshot_button.pack(pady=5)
 
-        self.status_label = ttk.Label(master, text="Clicking Disabled")
-        self.status_label.pack(pady=5)
-
-        self.screenshot_status_label = ttk.Label(master, text="Screenshots Disabled")
-        self.screenshot_status_label.pack(pady=5)
-
         self.last_click_label = ttk.Label(master, text="Last Click: N/A")
         self.last_click_label.pack(pady=5)
+
+        self.time_pattern_label = ttk.Label(master, text=self.get_time_pattern_text())
+        self.time_pattern_label.pack(pady=5)
 
         self.reload_button = ttk.Button(master, text="Reload Config", command=self.reload_config)
         self.reload_button.pack(pady=5)
 
         self.quit_button = ttk.Button(master, text="Quit", command=self.quit)
         self.quit_button.pack(pady=5)
-
-        self.clicking_enabled.trace("w", self.update_status)
-        self.screenshot_enabled.trace("w", self.update_screenshot_status)
 
         self.setup_hotkeys()
 
@@ -236,23 +230,16 @@ class AutoClickerApp:
         keyboard.add_hotkey(keybinds['toggle_screenshots'], self.toggle_screenshots)
         keyboard.add_hotkey(keybinds['quit'], self.quit)
 
-    def update_status(self, *args):
-        if self.clicking_enabled.get():
-            self.status_label.config(text="Clicking Enabled")
-        else:
-            self.status_label.config(text="Clicking Disabled")
-
-    def update_screenshot_status(self, *args):
-        if self.screenshot_enabled.get():
-            self.screenshot_status_label.config(text="Screenshots Enabled")
-        else:
-            self.screenshot_status_label.config(text="Screenshots Disabled")
+    def get_time_pattern_text(self):
+        patterns = self.config['time_patterns']
+        return f"Time Pattern: {patterns['hour']}:{patterns['minute']}:{patterns['second']}:{patterns['millisecond']}"
 
     def reload_config(self):
         keyboard.unhook_all()
         self.config = load_config()
         self.apply_config()
         self.setup_hotkeys()
+        self.time_pattern_label.config(text=self.get_time_pattern_text())
         log_with_timestamp("Config reloaded")
 
     def update_last_click(self, time):
@@ -272,7 +259,7 @@ class AutoClickerApp:
 
     def take_screenshot(self, click_time):
         def delayed_screenshot():
-            delay = float(self.config['screenshot']['delay'])  # Ensure delay is a float
+            delay = float(self.config['screenshot']['delay'])
             time.sleep(delay)
             if not os.path.exists('screenshots'):
                 os.makedirs('screenshots')
