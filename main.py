@@ -48,13 +48,13 @@ def load_config():
         },
         "time_patterns": {
             "hour": "XX",
-            "minute": "XX",
-            "second": ["15", "30", "45"],
-            "millisecond": "XX"
+            "minute": "X7",
+            "second": ["00", "15", "30"],
+            "millisecond": "50"
         },
         "window": {
             "title": "Echo Manipulator",
-            "size": "300x168"
+            "size": "300x200"
         },
         "screenshot": {
             "width": 940,
