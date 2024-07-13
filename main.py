@@ -1,5 +1,8 @@
 import json
+import os
+import shutil
 import tkinter as tk
+from datetime import datetime
 from tkinter import ttk
 import threading
 from selenium.webdriver.chrome.options import Options
@@ -14,35 +17,79 @@ import time
 import keyboard
 
 
+def setup_logging():
+    if not os.path.exists('logs'):
+        os.makedirs('logs')
+
+    # Archive old logs
+    current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+    if os.path.exists('logs/app.log'):
+        shutil.move('logs/app.log', f'logs/app_{current_time}.log')
+
+    return open('logs/app.log', 'w')
+
+
+log_file = setup_logging()
+
+
 def log_with_timestamp(message):
-    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {message}")
+    timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
+    log_message = f"[{timestamp}] {message}"
+    print(log_message)
+    log_file.write(log_message + '\n')
+    log_file.flush()
 
 
 def load_config():
+    default_config = {
+        "keybinds": {
+            "toggle_clicking": "f13",
+            "quit": "f16"
+        },
+        "time_patterns": {
+            "hour": "XX",
+            "minute": "XX",
+            "second": ["15", "30", "45"],
+            "millisecond": "XX"
+        },
+        "window": {
+            "title": "Echo Manipulator",
+            "size": "300x168"
+        },
+        "screenshot": {
+            "width": 940,
+            "height": 735
+        }
+    }
+
     try:
         with open('config.json', 'r') as config_file:
-            return json.load(config_file)
+            config = json.load(config_file)
+
+        # Ensure all expected keys are present
+        for key, value in default_config.items():
+            if key not in config:
+                config[key] = value
+            elif isinstance(value, dict):
+                for sub_key, sub_value in value.items():
+                    if sub_key not in config[key]:
+                        config[key][sub_key] = sub_value
+
+        # Ensure screenshot dimensions are integers
+        config['screenshot']['width'] = int(config['screenshot']['width'])
+        config['screenshot']['height'] = int(config['screenshot']['height'])
+
+        # Write back the potentially updated config
+        with open('config.json', 'w') as config_file:
+            json.dump(config, config_file, indent=4)
+
     except FileNotFoundError:
         log_with_timestamp("Config file not found. Creating default config.")
-        default_config = {
-            "keybinds": {
-                "toggle_clicking": "f13",
-                "quit": "f16"
-            },
-            "time_patterns": {
-                "hour": "XX",
-                "minute": "XX",
-                "second": ["15", "30", "45"],
-                "millisecond": "XX"
-            },
-            "window": {
-                "title": "Echo Manipulator",
-                "size": "300x200"
-            }
-        }
+        config = default_config
         with open('config.json', 'w') as config_file:
-            json.dump(default_config, config_file, indent=4)
-        return default_config
+            json.dump(config, config_file, indent=4)
+
+    return config
 
 
 def setup_driver():
@@ -144,9 +191,14 @@ class AutoClickerApp:
 
         self.clicking_enabled = tk.BooleanVar()
         self.clicking_enabled.set(False)
+        self.screenshot_enabled = tk.BooleanVar()
+        self.screenshot_enabled.set(False)
 
         self.enable_button = ttk.Checkbutton(master, text="Enable Clicking", variable=self.clicking_enabled)
         self.enable_button.pack(pady=5)
+
+        self.screenshot_button = ttk.Checkbutton(master, text="Enable Screenshots", variable=self.screenshot_enabled)
+        self.screenshot_button.pack(pady=5)
 
         self.status_label = ttk.Label(master, text="Clicking Disabled")
         self.status_label.pack(pady=5)
@@ -199,6 +251,20 @@ class AutoClickerApp:
         self.running = False
         self.master.after(100, self.master.quit)
 
+    def take_screenshot(self):
+        if not os.path.exists('screenshots'):
+            os.makedirs('screenshots')
+        screenshot_config = self.config['screenshot']
+        width = int(screenshot_config['width'])
+        height = int(screenshot_config['height'])
+        screen_width, screen_height = pyautogui.size()
+        left = (screen_width - width) // 2
+        top = (screen_height - height) // 2
+        screenshot = pyautogui.screenshot(region=(left, top, width, height))
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        screenshot.save(f'screenshots/screenshot_{timestamp}.png')
+        log_with_timestamp(f"Screenshot saved: screenshot_{timestamp}.png")
+
 
 def main():
     log_with_timestamp("Starting main function")
@@ -233,6 +299,8 @@ def main():
                                     click_time = f"{h}:{m}:{s}:{ms}"
                                     log_with_timestamp(f"Clicked at {click_time}")
                                     app.update_last_click(click_time)
+                                    if app.screenshot_enabled.get():
+                                        app.take_screenshot()
                                     last_click_second = s
                     except Exception as e:
                         if app.running:
@@ -258,6 +326,7 @@ def main():
         time.sleep(0.2)
         driver.quit()
         log_with_timestamp("Driver quit")
+        log_file.close()
 
 
 if __name__ == "__main__":
