@@ -58,7 +58,8 @@ def load_config():
         },
         "screenshot": {
             "width": 940,
-            "height": 735
+            "height": 735,
+            "delay": 2.0  # Default 2 seconds delay
         }
     }
 
@@ -75,7 +76,7 @@ def load_config():
                     if sub_key not in config[key]:
                         config[key][sub_key] = sub_value
 
-        # Ensure screenshot dimensions are integers
+        # Make sure all screenshot dimensions are integers
         config['screenshot']['width'] = int(config['screenshot']['width'])
         config['screenshot']['height'] = int(config['screenshot']['height'])
 
@@ -251,19 +252,24 @@ class AutoClickerApp:
         self.running = False
         self.master.after(100, self.master.quit)
 
-    def take_screenshot(self):
-        if not os.path.exists('screenshots'):
-            os.makedirs('screenshots')
-        screenshot_config = self.config['screenshot']
-        width = int(screenshot_config['width'])
-        height = int(screenshot_config['height'])
-        screen_width, screen_height = pyautogui.size()
-        left = (screen_width - width) // 2
-        top = (screen_height - height) // 2
-        screenshot = pyautogui.screenshot(region=(left, top, width, height))
-        timestamp = time.strftime("%Y%m%d_%H%M%S")
-        screenshot.save(f'screenshots/screenshot_{timestamp}.png')
-        log_with_timestamp(f"Screenshot saved: screenshot_{timestamp}.png")
+    def take_screenshot(self, click_time):
+        def delayed_screenshot():
+            time.sleep(self.config['screenshot']['delay'])
+            if not os.path.exists('screenshots'):
+                os.makedirs('screenshots')
+            screenshot_config = self.config['screenshot']
+            width = int(screenshot_config['width'])
+            height = int(screenshot_config['height'])
+            screen_width, screen_height = pyautogui.size()
+            left = (screen_width - width) // 2
+            top = (screen_height - height) // 2
+            screenshot = pyautogui.screenshot(region=(left, top, width, height))
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            screenshot.save(f'screenshots/screenshot_{timestamp}.png')
+            log_with_timestamp(f"Screenshot saved: screenshot_{timestamp}.png (for click at {click_time})")
+
+        screenshot_thread = threading.Thread(target=delayed_screenshot)
+        screenshot_thread.start()
 
 
 def main():
@@ -300,7 +306,7 @@ def main():
                                     log_with_timestamp(f"Clicked at {click_time}")
                                     app.update_last_click(click_time)
                                     if app.screenshot_enabled.get():
-                                        app.take_screenshot()
+                                        app.take_screenshot(click_time)
                                     last_click_second = s
                     except Exception as e:
                         if app.running:
