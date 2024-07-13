@@ -44,6 +44,7 @@ def load_config():
     default_config = {
         "keybinds": {
             "toggle_clicking": "f13",
+            "toggle_screenshots": "f14",
             "quit": "f16"
         },
         "time_patterns": {
@@ -76,9 +77,10 @@ def load_config():
                     if sub_key not in config[key]:
                         config[key][sub_key] = sub_value
 
-        # Make sure all screenshot dimensions are integers
+        # Make sure all screenshot dimensions are integers and delay is float
         config['screenshot']['width'] = int(config['screenshot']['width'])
         config['screenshot']['height'] = int(config['screenshot']['height'])
+        config['screenshot']['delay'] = float(config['screenshot']['delay'])
 
         # Write back the potentially updated config
         with open('config.json', 'w') as config_file:
@@ -204,6 +206,9 @@ class AutoClickerApp:
         self.status_label = ttk.Label(master, text="Clicking Disabled")
         self.status_label.pack(pady=5)
 
+        self.screenshot_status_label = ttk.Label(master, text="Screenshots Disabled")
+        self.screenshot_status_label.pack(pady=5)
+
         self.last_click_label = ttk.Label(master, text="Last Click: N/A")
         self.last_click_label.pack(pady=5)
 
@@ -214,6 +219,7 @@ class AutoClickerApp:
         self.quit_button.pack(pady=5)
 
         self.clicking_enabled.trace("w", self.update_status)
+        self.screenshot_enabled.trace("w", self.update_screenshot_status)
 
         self.setup_hotkeys()
 
@@ -227,7 +233,20 @@ class AutoClickerApp:
     def setup_hotkeys(self):
         keybinds = self.config['keybinds']
         keyboard.add_hotkey(keybinds['toggle_clicking'], self.toggle_clicking)
+        keyboard.add_hotkey(keybinds['toggle_screenshots'], self.toggle_screenshots)
         keyboard.add_hotkey(keybinds['quit'], self.quit)
+
+    def update_status(self, *args):
+        if self.clicking_enabled.get():
+            self.status_label.config(text="Clicking Enabled")
+        else:
+            self.status_label.config(text="Clicking Disabled")
+
+    def update_screenshot_status(self, *args):
+        if self.screenshot_enabled.get():
+            self.screenshot_status_label.config(text="Screenshots Enabled")
+        else:
+            self.screenshot_status_label.config(text="Screenshots Disabled")
 
     def reload_config(self):
         keyboard.unhook_all()
@@ -236,17 +255,16 @@ class AutoClickerApp:
         self.setup_hotkeys()
         log_with_timestamp("Config reloaded")
 
-    def update_status(self, *args):
-        if self.clicking_enabled.get():
-            self.status_label.config(text="Clicking Enabled")
-        else:
-            self.status_label.config(text="Clicking Disabled")
-
     def update_last_click(self, time):
         self.last_click_label.config(text=f"Last Click: {time}")
 
     def toggle_clicking(self):
         self.clicking_enabled.set(not self.clicking_enabled.get())
+        log_with_timestamp(f"Clicking {'enabled' if self.clicking_enabled.get() else 'disabled'}")
+
+    def toggle_screenshots(self):
+        self.screenshot_enabled.set(not self.screenshot_enabled.get())
+        log_with_timestamp(f"Screenshots {'enabled' if self.screenshot_enabled.get() else 'disabled'}")
 
     def quit(self):
         self.running = False
@@ -254,7 +272,8 @@ class AutoClickerApp:
 
     def take_screenshot(self, click_time):
         def delayed_screenshot():
-            time.sleep(self.config['screenshot']['delay'])
+            delay = float(self.config['screenshot']['delay'])  # Ensure delay is a float
+            time.sleep(delay)
             if not os.path.exists('screenshots'):
                 os.makedirs('screenshots')
             screenshot_config = self.config['screenshot']
